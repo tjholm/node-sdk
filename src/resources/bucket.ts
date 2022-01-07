@@ -1,4 +1,6 @@
 import {
+  Action,
+  PolicyResource,
   Resource,
   ResourceDeclareRequest,
   ResourceDeclareResponse,
@@ -12,10 +14,30 @@ type BucketPermission = 'reading' | 'writing' | 'deleting';
 
 const everything: BucketPermission[] = ['reading', 'writing', 'deleting'];
 
+const permsToActions = (...perms: BucketPermission[]) => {
+  return perms.reduce((actions, perm) => {
+    switch (perm) {
+      case 'reading':
+        return [...actions, Action.BUCKETFILEGET, Action.BUCKETFILELIST];
+      case 'writing':
+        return [...actions, Action.BUCKETFILEPUT];
+      case 'deleting':
+        return [...actions, Action.BUCKETFILEDELETE];
+      default:
+        throw new Error(
+          `unknown bucket permission ${perm}, supported permissions are ${everything.join(
+            ', '
+          )}`
+        );
+    }
+  }, []);
+};
+
 /**
  * Cloud storage bucket resource for large file storage.
  */
 class BucketResource extends Base {
+  private resourcePromise: Promise<Resource>;
 
   /**
    * Register this bucket as a required resource for the calling function/container
@@ -28,7 +50,7 @@ class BucketResource extends Base {
     resource.setType(ResourceType.BUCKET);
     req.setResource(resource);
 
-    return new Promise<void>((resolve, reject) => {
+    const prom = new Promise<void>((resolve, reject) => {
       resourceClient.declare(
         req,
         (error, response: ResourceDeclareResponse) => {
@@ -42,6 +64,12 @@ class BucketResource extends Base {
         }
       );
     });
+
+    this.resourcePromise = new Promise<Resource>((res, rej) => {
+      prom.then(() => res(resource)).catch(rej);
+    });
+
+    return prom;
   }
 
   /**
@@ -54,6 +82,31 @@ class BucketResource extends Base {
    */
   public for(...perms: BucketPermission[]): Bucket {
     // TODO: register required policy resources.
+    const req = new ResourceDeclareRequest();
+    const resource = new Resource();
+    resource.setType(ResourceType.POLICY);
+    const policy = new PolicyResource();
+    // TODO: Should we set the principal in this case or let the Server assume from its state?
+    // policyResource.setPrincipalsList()
+    policy.setActionsList(permsToActions(...perms));
+    policy.setResourcesList;
+
+    req.setResource(resource);
+    req.setPolicy(policy);
+
+    this.resourcePromise.then(() => {
+      resourceClient.declare(
+        req,
+        (error, response: ResourceDeclareResponse) => {
+          if (error) {
+            // TODO: remove this ignore when not using link
+            // @ts-ignore
+            throw new Error(fromGrpcError(error));
+          }
+        }
+      );
+    });
+
     return storage().bucket(this.name);
   }
 }
