@@ -3,15 +3,22 @@ import {
   ResourceDeclareRequest,
   ResourceDeclareResponse,
   ResourceType,
+  Action,
 } from '@nitric/api/proto/resource/v1/resource_pb';
+import { fromGrpcError } from '../api/errors';
+import { documents } from '../api/documents';
 import resourceClient from './client';
-import { make, Resource as Base } from './common';
+import { make, Permission, Resource as Base, ResourcePermMap } from './common';
 
-class CollectionRef {}
-
-type CollectionPermission = 'reading' | 'writing' | 'deleting';
-
-const everything: CollectionPermission[] = ['reading', 'writing', 'deleting'];
+const RESOURCE_PERM_MAP: ResourcePermMap = {
+  reading: [
+    Action.COLLECTIONDOCUMENTREAD,
+    Action.COLLECTIONLIST,
+    Action.COLLECTIONQUERY,
+  ],
+  writing: [Action.COLLECTIONDOCUMENTWRITE],
+  deleting: [Action.COLLECTIONDOCUMENTDELETE],
+};
 
 /**
  * A document collection resources, such as a collection/table in a document database.
@@ -23,18 +30,18 @@ class CollectionResource extends Base {
    */
   protected async register(): Promise<void> {
     const req = new ResourceDeclareRequest();
+
     const resource = new Resource();
     resource.setName(this.name);
     resource.setType(ResourceType.COLLECTION);
     req.setResource(resource);
 
-    return new Promise<void>((resolve, reject) => {
+    const prom = new Promise<void>((resolve, reject) => {
       resourceClient.declare(
         req,
         (error, response: ResourceDeclareResponse) => {
           if (error) {
             // TODO: remove this ignore when not using link
-            // @ts-ignore
             reject(fromGrpcError(error));
           } else {
             resolve();
@@ -42,6 +49,12 @@ class CollectionResource extends Base {
         }
       );
     });
+
+    this.resourcePromise = new Promise<Resource>((res, rej) => {
+      prom.then(() => res(resource)).catch(rej);
+    });
+
+    return prom;
   }
 
   /**
@@ -52,9 +65,10 @@ class CollectionResource extends Base {
    * @param perms the required permission set
    * @returns a usable collection reference
    */
-  public for(...perms: CollectionPermission[]): CollectionRef {
-    // TODO: call server to request permissions.
-    return new CollectionRef();
+  public for<T = Record<string, any>>(...perms: Permission[]) {
+    this.setPolicies(RESOURCE_PERM_MAP, ...perms);
+
+    return documents().collection<T>(this.name);
   }
 }
 
