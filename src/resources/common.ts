@@ -3,37 +3,13 @@ import {
   ResourceType,
   PolicyResource,
   ResourceDeclareRequest,
-  ResourceDeclareResponse,
   ActionMap,
 } from '@nitric/api/proto/resource/v1/resource_pb';
 import resourceClient from './client';
 
-export type Permission = 'reading' | 'writing' | 'deleting';
+export type ActionsList = ActionMap[keyof ActionMap][];
 
-const everything: Permission[] = ['reading', 'writing', 'deleting'];
-
-export type ResourcePermMap = Record<Permission, ActionMap[keyof ActionMap][]>;
-
-type ActionsList = ActionMap[keyof ActionMap][];
-
-export const permsToActions = (
-  resourcePermMap: ResourcePermMap,
-  ...perms: Permission[]
-): ActionsList => {
-  return perms.reduce((actions, perm) => {
-    if (!['deleting', 'reading', 'writing'].includes(perm)) {
-      throw new Error(
-        `unknown bucket permission ${perm}, supported permissions are ${everything.join(
-          ', '
-        )}`
-      );
-    }
-
-    return [...actions, ...resourcePermMap[perm]];
-  }, []);
-};
-
-export abstract class Resource {
+export abstract class Resource<Permission> {
   /**
    * Unique name for the resource by type within the stack.
    *
@@ -46,13 +22,13 @@ export abstract class Resource {
     this.name = name;
   }
 
-  setPolicies(resourcePermMap: ResourcePermMap, ...perms: Permission[]) {
+  setPolicies(...perms: Permission[]) {
     const req = new ResourceDeclareRequest();
     const policyResource = new ProtoResource();
     policyResource.setType(ResourceType.POLICY);
 
     const policy = new PolicyResource();
-    const actions = permsToActions(resourcePermMap, ...perms);
+    const actions = this.permsToActions(...perms);
     policy.setActionsList(actions);
 
     req.setResource(policyResource);
@@ -63,7 +39,7 @@ export abstract class Resource {
 
       resourceClient.declare(
         req,
-        (error, response: ResourceDeclareResponse) => {
+        (error) => {
           if (error) {
             // TODO: remove this ignore when not using link
             // @ts-ignore
@@ -74,14 +50,15 @@ export abstract class Resource {
     });
   }
 
+  protected abstract permsToActions(...perms: Permission[]): ActionsList;
   protected abstract register(): Promise<void>;
 }
 
 // This singleton helps avoid duplicate references to bucket('name')
 // will return the same bucket resource
-const cache: Record<string, Record<string, Resource>> = {};
+const cache: Record<string, Record<string, Resource<unknown>>> = {};
 
-type newer = <T>(name: string) => T;
+type newer<T> = (name: string) => T;
 
 /**
  * Provides a new resource instance.
@@ -89,9 +66,9 @@ type newer = <T>(name: string) => T;
  * @param name the _unique_ name of the resource within the stack
  * @returns the resource
  */
-export const make = <T extends Resource>(
+export const make = <T extends Resource<unknown>>(
   T: new (name: string) => T
-): ((name: string) => T) => {
+): newer<T> => {
   const typename = typeof T;
   return (name: string) => {
     if (!cache[typename]) {

@@ -1,29 +1,20 @@
 import {
   Resource,
   ResourceDeclareRequest,
-  ResourceDeclareResponse,
   ResourceType,
   Action,
 } from '@nitric/api/proto/resource/v1/resource_pb';
 import { fromGrpcError } from '../api/errors';
 import { documents } from '../api/documents';
 import resourceClient from './client';
-import { make, Permission, Resource as Base, ResourcePermMap } from './common';
+import { make, Resource as Base, ActionsList } from './common';
 
-const RESOURCE_PERM_MAP: ResourcePermMap = {
-  reading: [
-    Action.COLLECTIONDOCUMENTREAD,
-    Action.COLLECTIONLIST,
-    Action.COLLECTIONQUERY,
-  ],
-  writing: [Action.COLLECTIONDOCUMENTWRITE],
-  deleting: [Action.COLLECTIONDOCUMENTDELETE],
-};
+export type CollectionPermission = 'reading' | 'writing' | 'deleting';
 
 /**
  * A document collection resources, such as a collection/table in a document database.
  */
-class CollectionResource extends Base {
+class CollectionResource extends Base<CollectionPermission> {
   /**
    * Register this collection as a required resource for the calling function/container
    * @returns a promise that resolves when the registration is complete
@@ -39,7 +30,7 @@ class CollectionResource extends Base {
     const prom = new Promise<void>((resolve, reject) => {
       resourceClient.declare(
         req,
-        (error, response: ResourceDeclareResponse) => {
+        (error) => {
           if (error) {
             // TODO: remove this ignore when not using link
             reject(fromGrpcError(error));
@@ -57,6 +48,30 @@ class CollectionResource extends Base {
     return prom;
   }
 
+  protected permsToActions(...perms: CollectionPermission[]): ActionsList {
+    return perms.reduce((actions, p) => {
+      switch(p) {
+        case "reading":
+          return [
+            ...actions, 
+            Action.COLLECTIONLIST, 
+            Action.COLLECTIONDOCUMENTREAD, 
+            Action.COLLECTIONQUERY
+          ];
+        case "writing":
+          return [
+            ...actions,
+            Action.COLLECTIONDOCUMENTWRITE,
+          ];
+        case "deleting":
+          return [
+            ...actions,
+            Action.COLLECTIONDOCUMENTDELETE
+          ];
+      }
+    }, []);
+  }
+
   /**
    * Return a collection reference and register the permissions required by the currently scoped function for this resource.
    *
@@ -65,8 +80,8 @@ class CollectionResource extends Base {
    * @param perms the required permission set
    * @returns a usable collection reference
    */
-  public for<T = Record<string, any>>(...perms: Permission[]) {
-    this.setPolicies(RESOURCE_PERM_MAP, ...perms);
+  public for<T = Record<string, any>>(...perms: CollectionPermission[]) {
+    this.setPolicies(...perms);
 
     return documents().collection<T>(this.name);
   }
