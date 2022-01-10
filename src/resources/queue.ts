@@ -3,19 +3,18 @@ import {
   ResourceDeclareRequest,
   ResourceDeclareResponse,
   ResourceType,
+  Action,
 } from '@nitric/api/proto/resource/v1/resource_pb';
 import resourceClient from './client';
 import { queues, Queue } from '../api/';
-import { make, Resource as Base } from './common';
+import { ActionsList, make, Resource as Base } from './common';
 
 type QueuePermission = 'sending' | 'receiving';
-
-const everything: QueuePermission[] = ['sending', 'receiving'];
 
 /**
  * Queue resource for async send/receive messaging
  */
-class QueueResource extends Base {
+class QueueResource extends Base<QueuePermission> {
   /**
    * Register this queue as a required resource for the calling function/container
    * @returns a promise that resolves when the registration is complete
@@ -43,6 +42,23 @@ class QueueResource extends Base {
     });
   }
 
+  protected permsToActions(...perms: QueuePermission[]): ActionsList {
+    return perms.reduce((actions, p) => {
+      switch(p) {
+        case "sending":
+          return [
+            ...actions, 
+            Action.QUEUESEND, 
+          ];
+        case "receiving":
+          return [
+            ...actions,
+            Action.QUEUERECEIVE,
+          ];
+      }
+    }, []);
+  }
+
   /**
    * Return a queue reference and register the permissions required by the currently scoped function for this resource.
    *
@@ -53,10 +69,11 @@ class QueueResource extends Base {
    * @returns
    */
   public for(
-    perm: QueuePermission[] | QueuePermission,
     ...perms: QueuePermission[]
   ): Queue {
-    // TODO: register required policy resources.
+    // Register policy resources
+    this.setPolicies(...perms);
+
     return queues().queue(this.name);
   }
 }
