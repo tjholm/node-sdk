@@ -1,12 +1,12 @@
 import {
   Resource,
   ResourceDeclareRequest,
-  ResourceDeclareResponse,
   ResourceType,
   Action,
 } from '@nitric/api/proto/resource/v1/resource_pb';
 import resourceClient from './client';
 import { queues, Queue } from '../api/';
+import { fromGrpcError } from '../api/errors';
 import { ActionsList, make, Resource as Base } from './common';
 
 type QueuePermission = 'sending' | 'receiving';
@@ -29,10 +29,8 @@ class QueueResource extends Base<QueuePermission> {
     return new Promise<void>((resolve, reject) => {
       resourceClient.declare(
         req,
-        (error, response: ResourceDeclareResponse) => {
+        (error) => {
           if (error) {
-            // TODO: remove this ignore when not using link
-            // @ts-ignore
             reject(fromGrpcError(error));
           } else {
             resolve();
