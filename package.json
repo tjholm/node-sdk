@@ -33,7 +33,9 @@
   "dependencies": {
     "@grpc/grpc-js": "1.10.0",
     "@nitric/grpc-error-status": "^0.0.2",
+    "@types/json-schema": "^7.0.15",
     "google-protobuf": "3.14.0",
+    "openai": "^4.86.1",
     "portfinder": "^1.0.32",
     "tslib": "^2.1.0"
   },
