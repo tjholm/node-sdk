@@ -75,6 +75,7 @@ class Thread {
 
   // send a new chat message and receive a response
   private async send(message: string): Promise<string> {
+    console.log('adding to history', message);
     this.history = {
       messages: [
         ...this.history.messages,
@@ -85,24 +86,33 @@ class Thread {
       ],
     };
 
+    console.log('sending message', message);
     // Get the response
     const completion = await this.openai.chat.completions.create({
       model: this.model,
       messages: this.history.messages,
     });
 
-    let response = completion.choices[0].message;
-    // Add the response to the history
-    this.history = {
-      messages: [
-        ...this.history.messages,
-        {
-          role: 'assistant',
-          content: response.content,
-        },
-      ],
-    };
+    console.log('got response', completion);
 
+    let response = completion?.choices[0]?.message;
+
+    console.log('adding response to history', response);
+
+    if (response) {
+      // Add the response to the history
+      this.history = {
+        messages: [
+          ...this.history.messages,
+          {
+            role: 'assistant',
+            content: response.content,
+          },
+        ],
+      };
+    }
+
+    console.log('checking for tool calls');
     // If we have tool calls incorporate them into the final response
     if (response.tool_calls) {
       this.history = {
@@ -229,7 +239,7 @@ class Chat {
 // Create a new nitric Chat (LLM) resource
 // TODO: We could implement a withStore method as well that can substitute the memory store for other store types or even just a storage callback
 // so additional stores can be used for memory e.g. sql, redis, webhook etc.
-const chat = (name: string, config: ChatConfig) => {
+export const chat = (name: string, config: ChatConfig) => {
   // create a kv store for this chats memory/threads
   const memory = kv<ChatHistory>(`${name}-memory`).allow(
     'set',
