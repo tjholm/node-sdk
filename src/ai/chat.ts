@@ -111,10 +111,7 @@ class Thread {
       this.history = {
         messages: [
           ...this.history.messages,
-          {
-            role: 'assistant',
-            content: response.content,
-          },
+          response,
         ],
       };
     }
@@ -122,6 +119,8 @@ class Thread {
     console.log('checking for tool calls');
     // If we have tool calls incorporate them into the final response
     if (response.tool_calls) {
+      console.log('found tool calls', response.tool_calls);
+
       this.history = {
         messages: [
           ...this.history.messages,
@@ -141,6 +140,7 @@ class Thread {
                 // These are currently not sorted and provide no guarantees of correct param order
                 // XXX: Should tools be able to return a promise? (or always be async) Yes
                 const vals = Object.values(args);
+                console.log("calling tool", name, vals);
                 const result = await this.tools[name].callback(...vals);
                 // convert the result to 'content'
                 const jsonResult = JSON.stringify(result);
