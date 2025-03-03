@@ -142,8 +142,11 @@ class Thread {
                 const vals = Object.values(args);
                 console.log("calling tool", name, vals);
                 const result = await this.tools[name].callback(...vals);
+                console.log("got result", result);
                 // convert the result to 'content'
                 const jsonResult = JSON.stringify(result);
+
+                console.log("adding result to history", jsonResult);
 
                 return {
                   role: 'tool',
@@ -157,6 +160,7 @@ class Thread {
       };
 
       // re-call the assistant
+      console.log('re-calling assistant');
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: this.history.messages,
@@ -171,6 +175,7 @@ class Thread {
 
       // Add the new completion to the history
       response = completion.choices[0].message;
+      console.log('got response', response);
       // Add the response to the history
       this.history = {
         messages: [
