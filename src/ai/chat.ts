@@ -91,6 +91,13 @@ class Thread {
     const completion = await this.openai.chat.completions.create({
       model: this.model,
       messages: this.history.messages,
+      tools: Object.keys(this.tools).map((toolName) => ({
+        type: 'function',
+        function: toolConfigToFunctionDefinition(
+          toolName,
+          this.tools[toolName]
+        ),
+      })),
     });
 
     console.log('got response', completion);
@@ -153,6 +160,13 @@ class Thread {
       const completion = await this.openai.chat.completions.create({
         model: this.model,
         messages: this.history.messages,
+        tools: Object.keys(this.tools).map((toolName) => ({
+          type: 'function',
+          function: toolConfigToFunctionDefinition(
+            toolName,
+            this.tools[toolName]
+          ),
+        })),
       });
 
       // Add the new completion to the history
